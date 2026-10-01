@@ -157,83 +157,97 @@ Expected output: `PONG`.
 
 ## 9. Git & Team Workflow
 
-### A. Command-Line Workflow
+### A. Terminal / Git Command Workflow
 
-1. **Before starting work:** Always ensure your `main` branch is up to date:
-   ```bash
-   git checkout main
-   git pull origin main
-   ```
-
-2. **Create a feature branch:**
-   ```bash
-   git checkout -b feature/<feature-name>
-   ```
-   *Example:*
-   ```bash
-   git checkout -b feature/face-recognition
-   ```
-
-3. **Check changes:**
+1. **Check changes:**
    ```bash
    git status
+   ```
+
+2. **Review changes:**
+   ```bash
    git diff
    ```
 
-4. **Stage and commit focused changes:**
+3. **Stage changes:**
    ```bash
    git add .
+   ```
+
+4. **Commit changes:**
+   ```bash
+   git commit -m "Describe your changes"
+   ```
+   *Example:*
+   ```bash
    git commit -m "Add face recognition pipeline"
    ```
 
-5. **Push the branch to GitHub:**
+5. **Push changes:**
    ```bash
-   # First push:
-   git push -u origin feature/<feature-name>
-
-   # Subsequent pushes:
    git push
    ```
-
-6. **Create a Pull Request:**
-   * Open the repository on GitHub.
-   * Create a Pull Request (PR) from your feature branch into `main`.
-   * Request review from a teammate.
-   * Merge into `main` only after review and verification.
-
-7. **Before starting your next task:**
+   *Note: For the first push of a new feature branch:*
    ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b feature/<new-feature>
+   git push -u origin feature/<feature-name>
    ```
 
 ---
 
-### B. GitHub Desktop Workflow
+### B. Before Starting a New Task
 
-For team members using GitHub Desktop, here are the equivalent actions:
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/<feature-name>
+```
+
+*Example:*
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/face-recognition
+```
+
+---
+
+### C. Pull Request Workflow
+
+1. Review changes with `git status` and `git diff`.
+2. Run `git add .`.
+3. Commit with a clear message.
+4. Push the feature branch.
+5. Open the repository on GitHub.
+6. Create a Pull Request from the feature branch into `main`.
+7. Request review from a teammate.
+8. Merge into `main` only after review and verification.
+
+---
+
+### D. GitHub Desktop Workflow
 
 | Git Operation | GitHub Desktop Action |
 |---|---|
-| `git pull` | Click **Fetch origin** → Click **Pull origin** |
-| `git checkout -b feature/...` | Click **Current Branch** dropdown → Click **New Branch** |
-| `git status` | View the **Changes** tab on the left panel |
-| `git diff` | Select a file under the **Changes** tab to review line-by-line diffs |
-| `git add` + `git commit` | Check files in **Changes** tab → Enter commit message → Click **Commit to <branch>** |
-| `git push` | Click **Push origin** (or **Publish branch** for first push) |
-| Pull Request | Click **Create Pull Request** (opens browser) |
+| `git status` | View the Changes tab |
+| `git diff` | Select a changed file to review the diff |
+| `git add .` | Select/check the files under Changes |
+| `git commit -m "..."` | Enter commit message → Click Commit to <branch> |
+| `git push` | Click Push origin |
+| First branch push | Click Publish branch |
+| `git pull` | Click Fetch origin → Pull origin |
+| Create PR | Click Create Pull Request |
 
 ---
 
 ## 10. Team Git Rules
 
 ### DO:
-* Pull latest `main` before starting new work.
-* Work strictly on a dedicated feature branch.
+* Pull the latest `main` before starting a new task.
+* Work on a dedicated feature branch.
 * Keep commits focused, small, and descriptive.
-* Review changes with `git diff` (or GitHub Desktop Changes tab) before committing.
-* Push your feature branch and use Pull Requests for integration.
+* Review changes with `git status` and `git diff` before committing.
+* Push the feature branch to GitHub.
+* Use Pull Requests for merging into `main`.
 * Keep the team informed when modifying shared schemas or interfaces.
 
 ### DO NOT:
@@ -245,3 +259,4 @@ For team members using GitHub Desktop, here are the equivalent actions:
 * **DO NOT** commit captured face images or biometric datasets.
 * **DO NOT** overwrite another teammate's work.
 * **DO NOT** reset or rebase shared branches without team agreement.
+
