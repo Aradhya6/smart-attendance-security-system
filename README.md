@@ -9,7 +9,18 @@
 This system integrates live CCTV video surveillance with face recognition to automate student attendance marking, detect unknown individuals, identify blacklisted persons, issue real-time alerts, and track movement history across campus camera locations.
 
 * **Specification (Source of Truth):** [`docs/Smart-Attendance-and-Security-System.md`](docs/Smart-Attendance-and-Security-System.md)
+* **Master Playbook:** [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md)
 * **Agent Guidelines & Token Efficiency:** [`TOKEN-OPTIMIZATION.md`](TOKEN-OPTIMIZATION.md)
+
+### System Architecture Documentation
+* [System Architecture Overview](docs/architecture/ARCHITECTURE.md)
+* [Architecture Decision Records (ADRs)](docs/architecture/DECISIONS.md)
+* [Database Design & Schema](docs/architecture/DATABASE.md)
+* [REST API Catalog](docs/architecture/API.md)
+* [AI Vision Engine Pipeline](docs/architecture/AI_PIPELINE.md)
+* [Frontend Streamlit Dashboard](docs/architecture/FRONTEND.md)
+* [End-to-End Data Flows](docs/architecture/DATA_FLOW.md)
+* [Module Boundaries & Rules](docs/architecture/MODULE_BOUNDARIES.md)
 
 ---
 
