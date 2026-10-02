@@ -1,36 +1,54 @@
-version: '3.8'
+# =============================================================================
+# Smart Attendance & Security System — Docker Compose
+# Phase 3: PostgreSQL 16 + pgvector (default) | Redis (optional, profile-gated)
+#
+# NOTES:
+#  - backend / dashboard / video_processor services are added in Phase 36.
+#  - Ports are bound to 127.0.0.1 to avoid exposing credentials on a network.
+#  - Redis is NOT started by default. Use:
+#      docker compose --profile redis up -d redis
+# =============================================================================
 
 services:
-  # ----------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
   # PostgreSQL 16 with pgvector extension
-  # ----------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
   db:
     image: pgvector/pgvector:pg16
     container_name: smart_attendance_db
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-smart_attendance}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bind ONLY to localhost — never expose on 0.0.0.0 in dev/prod
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Init scripts run ONLY on a fresh (empty) volume
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-smart_attendance}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
-  # ----------------------------------------------------------------------------
-  # Redis Cache & Pub/Sub
-  # ----------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # Redis 7 — optional, gated behind 'redis' profile (ADR-10)
+  # Start with:  docker compose --profile redis up -d redis
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: smart_attendance_redis
+    profiles: ["redis"]
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,79 +56,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
-  # ----------------------------------------------------------------------------
-  # FastAPI Backend API Server
-  # ----------------------------------------------------------------------------
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: smart_attendance_backend
-    restart: unless-stopped
-    ports:
-      - "${API_PORT:-8000}:8000"
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-smart_attendance}
-      - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-smart_attendance}
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-change_this_to_a_secure_random_string_in_production}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  # ----------------------------------------------------------------------------
-  # Streamlit Admin Dashboard
-  # ----------------------------------------------------------------------------
-  dashboard:
-    build:
-      context: .
-      dockerfile: dashboard/Dockerfile
-    container_name: smart_attendance_dashboard
-    restart: unless-stopped
-    ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
-    environment:
-      - BACKEND_API_URL=http://backend:8000/api/v1
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - backend
-      - redis
-
-  # ----------------------------------------------------------------------------
-  # Video Processing Service (Detection, Recognition, Pub/Sub)
-  # ----------------------------------------------------------------------------
-  video_processor:
-    build:
-      context: .
-      dockerfile: video_processor/Dockerfile
-    container_name: smart_attendance_video_processor
-    restart: unless-stopped
-    environment:
-      - BACKEND_API_URL=http://backend:8000/api/v1
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - DEVICE=${DEVICE:-cpu}
-      - ONNX_PROVIDER=${ONNX_PROVIDER:-CPUExecutionProvider}
-      - FACE_MATCH_THRESHOLD=${FACE_MATCH_THRESHOLD:-0.50}
-    depends_on:
-      - backend
-      - redis
-    # --------------------------------------------------------------------------
-    # GPU Configuration (Uncomment when NVIDIA GPU + nvidia-container-toolkit are installed)
-    # --------------------------------------------------------------------------
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-
+# =============================================================================
+# Named volumes (persist across container restarts)
+# =============================================================================
 volumes:
   postgres_data:
     name: smart_attendance_postgres_data

@@ -179,6 +179,74 @@ docker compose ps
 
 ---
 
-## Next Step
+## Next Step / Phase 3 — Docker Infrastructure
 
-Phase 3 — Docker Infrastructure: brings up PostgreSQL 16 + pgvector and Redis.
+### Install Docker Desktop
+
+1. Download from https://docs.docker.com/desktop/install/windows/
+2. Install and restart Windows
+3. Launch Docker Desktop and wait for the engine to start (whale icon in system tray turns solid)
+4. Verify: `docker info` must succeed
+
+### Start PostgreSQL 16 + pgvector
+
+```powershell
+# Ensure .env exists (copy once; never commit it)
+Copy-Item .env.example .env   # edit passwords inside if desired
+
+# Validate compose config
+docker compose config
+
+# Start the database (only; no other services yet)
+docker compose up -d db
+
+# Wait ~10s, then check health
+docker compose ps
+# Expected: db   Up (healthy)
+```
+
+### Verify pgvector Extension
+
+```powershell
+# List extensions — must include 'vector'
+docker compose exec db psql -U postgres -d smart_attendance -c "SELECT extname, extversion FROM pg_extension;"
+
+# Run a cosine-distance query — must return a number
+docker compose exec db psql -U postgres -d smart_attendance -c "SELECT '[1,2,3]'::vector <=> '[1,2,4]'::vector;"
+```
+
+### Verify Persistence
+
+```powershell
+# Create a temp table, restart, confirm it's gone (proves volume works)
+docker compose exec db psql -U postgres -d smart_attendance -c "CREATE TABLE _phase3_test (id serial);"
+docker compose down
+docker compose up -d db
+docker compose exec db psql -U postgres -d smart_attendance -c "SELECT to_regclass('_phase3_test');"  # should return NULL
+docker compose exec db psql -U postgres -d smart_attendance -c "DROP TABLE IF EXISTS _phase3_test;"
+```
+
+### Optional: Start Redis
+
+```powershell
+docker compose --profile redis up -d redis
+docker compose exec redis redis-cli ping   # expected: PONG
+docker compose --profile redis down
+```
+
+### Stop Everything
+
+```powershell
+docker compose down        # keeps named volumes (data preserved)
+docker compose down -v     # ALSO removes volumes — loses all data
+```
+
+### Phase 3 Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Port 5432 already in use | Local Postgres running | Stop local service or change `POSTGRES_PORT` in `.env` |
+| `docker compose` not found | Docker Desktop not installed | Install and restart |
+| `db` stays `starting` / unhealthy | Init SQL failed, or slow start | Check `docker compose logs db`; `docker compose down -v` then `up -d` |
+| Variables empty in compose | `.env` not present | Run `Copy-Item .env.example .env` |
+| Extension `vector` missing | Volume existed before init script was added | `docker compose down -v` then `up -d db` (loses local dev data) |

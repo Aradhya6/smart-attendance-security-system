@@ -1,6 +1,8 @@
 **/.git
 **/.gitignore
 **/.venv
+# NOTE: docker/postgres/init/ is intentionally NOT excluded here.
+# It must be available for volume mounts in docker-compose.yml.
 **/venv
 **/__pycache__
 **/*.pyc
