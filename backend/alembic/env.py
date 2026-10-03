@@ -18,8 +18,8 @@ if root_dir not in sys.path:
 load_dotenv(os.path.join(root_dir, ".env"))
 
 # Import Base and all models
-from backend.app.db.base import Base
-import backend.app.models  # noqa: F401
+from backend.app.db.base import Base  # noqa: E402
+import backend.app.models  # noqa: F401, E402
 
 config = context.config
 

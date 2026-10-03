@@ -250,3 +250,43 @@ docker compose down -v     # ALSO removes volumes — loses all data
 | `db` stays `starting` / unhealthy | Init SQL failed, or slow start | Check `docker compose logs db`; `docker compose down -v` then `up -d` |
 | Variables empty in compose | `.env` not present | Run `Copy-Item .env.example .env` |
 | Extension `vector` missing | Volume existed before init script was added | `docker compose down -v` then `up -d db` (loses local dev data) |
+
+---
+
+## Running the Backend API (Phase 5+)
+
+### 1. Ensure Database is Running
+
+```powershell
+docker compose up -d db
+```
+
+### 2. Run Database Migrations
+
+```powershell
+cd backend
+alembic upgrade head
+cd ..
+```
+
+### 3. Launch FastAPI Development Server
+
+```powershell
+# From repository root with virtual environment activated:
+uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### 4. Verify API Endpoints
+
+- Interactive Docs: http://127.0.0.1:8000/docs
+- API Liveness:
+  ```powershell
+  curl.exe http://127.0.0.1:8000/api/v1/health
+  # Response: {"status":"ok","version":"0.1.0","env":"development"}
+  ```
+- Database Readiness:
+  ```powershell
+  curl.exe http://127.0.0.1:8000/api/v1/health/db
+  # Response: {"status":"ok","db":"connected"}
+  ```
+

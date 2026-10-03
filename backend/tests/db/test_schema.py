@@ -2,13 +2,11 @@
 Database Schema and Constraint Tests
 Tests all business constraints, vector indexes, and partial unique indexes.
 """
-import uuid
 from datetime import date, datetime, timezone
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, DBAPIError
 
-from backend.app.models.user import User
 from backend.app.models.student import Student
 from backend.app.models.blacklist import BlacklistEntry
 from backend.app.models.camera import Camera
