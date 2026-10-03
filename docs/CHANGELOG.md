@@ -51,3 +51,13 @@
 - Frontend login gate test in `frontend/tests/test_login_gate.py`.
 - Student management API test suite `backend/tests/api/test_students.py` (7 tests).
 
+## [Phase 8] - 2026-10-03
+### Added
+- `CameraSource` abstract base class in `backend/app/cameras/source.py`.
+- `WebcamSource` with OpenCV VideoCapture and Windows `CAP_DSHOW` support in `backend/app/cameras/webcam.py`.
+- `RegistrationSessionManager` managing in-memory sessions with TTL and camera exclusivity in `backend/app/services/registration_session.py`.
+- Stream preview endpoints with short-lived tickets in `backend/app/api/v1/stream.py`.
+- Face registration session endpoints (`POST/DELETE /students/{id}/face/session`, `POST .../capture`, `GET .../status`, `DELETE .../face`) in `backend/app/api/v1/face.py`.
+- Guided webcam enrollment UI in Streamlit `frontend/app.py` with live MJPEG preview, pose prompts, and progress bar.
+- Test suites: `backend/tests/cameras/test_webcam_mock.py` (3 tests) and `backend/tests/api/test_face_session.py` (5 tests).
+

@@ -129,3 +129,24 @@ class APIClient:
         url = f"{self.base_url}/students/{student_uuid}"
         res = requests.delete(url, headers=self._get_headers())
         self._handle_response(res)
+
+    def get_stream_ticket(self, camera_id: str = "0") -> str:
+        url = f"{self.base_url}/stream/ticket"
+        res = requests.post(url, json={"camera_id": camera_id}, headers=self._get_headers())
+        data = self._handle_response(res)
+        return data["ticket"]
+
+    def create_face_session(self, student_uuid: str, target_samples: int = 30) -> Dict[str, Any]:
+        url = f"{self.base_url}/students/{student_uuid}/face/session"
+        res = requests.post(url, json={"target_samples": target_samples}, headers=self._get_headers())
+        return self._handle_response(res)
+
+    def capture_face_sample(self, student_uuid: str, session_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/students/{student_uuid}/face/session/{session_id}/capture"
+        res = requests.post(url, headers=self._get_headers())
+        return self._handle_response(res)
+
+    def cancel_face_session(self, student_uuid: str, session_id: str) -> None:
+        url = f"{self.base_url}/students/{student_uuid}/face/session/{session_id}"
+        res = requests.delete(url, headers=self._get_headers())
+        self._handle_response(res)

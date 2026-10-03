@@ -71,7 +71,7 @@ selected_page = st.sidebar.radio("Navigation", selectable_options)
 # Router
 if selected_page == "👥 Students":
     st.header("👥 Student Management")
-    tabs = st.tabs(["Search & List", "Register New Student", "Edit / Manage"])
+    tabs = st.tabs(["Search & List", "Register New Student", "Edit / Manage", "📸 Register Face (Webcam)"])
 
     with tabs[0]:
         st.subheader("Student Directory")
@@ -181,6 +181,69 @@ if selected_page == "👥 Students":
                             st.rerun()
                 except Exception as e:
                     st.error(f"Could not load student: {e}")
+
+    with tabs[3]:
+        st.subheader("Webcam Face Registration")
+        if role != "ADMIN":
+            st.warning("⚠️ Only ADMIN users have permission to register biometrics.")
+        else:
+            target_stu_id = st.text_input("Enter Student UUID to Enroll Face", key="face_reg_stu_id")
+            if target_stu_id:
+                try:
+                    stu = api.get_student(target_stu_id)
+                    st.write(f"Enrolling: **{stu['name']}** ({stu['student_id']})")
+                    if not stu.get("consent_given_at"):
+                        st.error("❌ Cannot register biometrics: Student has NOT provided biometric consent. Please update student profile with consent first.")
+                    else:
+                        st.success("✅ Consent verified. Ready for webcam enrollment.")
+                        target_samples = st.slider("Target Samples", min_value=5, max_value=50, value=10)
+
+                        if "face_session" not in st.session_state or st.session_state["face_session"].get("student_uuid") != target_stu_id:
+                            if st.button("▶️ Start Camera Registration Session"):
+                                try:
+                                    sess = api.create_face_session(target_stu_id, target_samples=target_samples)
+                                    ticket = api.get_stream_ticket("0")
+                                    st.session_state["face_session"] = {
+                                        "session_id": sess["session_id"],
+                                        "student_uuid": target_stu_id,
+                                        "target_samples": target_samples,
+                                        "current_samples": 0,
+                                        "ticket": ticket,
+                                        "prompt": "Look directly at camera",
+                                    }
+                                    st.rerun()
+                                except Exception as ex:
+                                    st.error(f"Could not start session: {ex}")
+                        else:
+                            active_sess = st.session_state["face_session"]
+                            col_preview, col_controls = st.columns([3, 2])
+                            with col_preview:
+                                stream_url = f"{api.base_url}/stream/0?ticket={active_sess['ticket']}"
+                                st.markdown(f'<img src="{stream_url}" width="100%" style="border-radius:8px; border:2px solid #4CAF50;" />', unsafe_allow_html=True)
+                            with col_controls:
+                                st.markdown(f"#### Prompt: **{active_sess.get('prompt', 'Look at camera')}**")
+                                progress = min(1.0, active_sess["current_samples"] / active_sess["target_samples"])
+                                st.progress(progress)
+                                st.caption(f"Captured: {active_sess['current_samples']} / {active_sess['target_samples']}")
+
+                                if st.button("📸 Capture Frame Sample", use_container_width=True):
+                                    try:
+                                        cap_res = api.capture_face_sample(target_stu_id, active_sess["session_id"])
+                                        active_sess["current_samples"] = cap_res["current_samples"]
+                                        active_sess["prompt"] = cap_res["pose_prompt"]
+                                        if active_sess["current_samples"] >= active_sess["target_samples"]:
+                                            st.balloons()
+                                            st.success("🎉 Target face samples reached! (Proceed to commit in Phase 11-12)")
+                                        st.rerun()
+                                    except Exception as ex:
+                                        st.error(f"Capture failed: {ex}")
+
+                                if st.button("❌ Cancel & Release Camera", use_container_width=True):
+                                    api.cancel_face_session(target_stu_id, active_sess["session_id"])
+                                    del st.session_state["face_session"]
+                                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading student: {e}")
 
 elif selected_page == "📊 Dashboard":
     st.header("📊 System Overview")
