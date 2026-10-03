@@ -91,6 +91,20 @@ async def validation_exception_handler(request: Request, exc: Any) -> JSONRespon
     )
 
 
+async def rate_limit_exception_handler(request: Request, exc: Any) -> JSONResponse:
+    """Convert RateLimitExceeded to 429 uniform body."""
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content=_error_body(
+            code="RATE_LIMITED",
+            message=f"Rate limit exceeded: {getattr(exc, 'detail', 'Too many requests')}",
+            request_id=request_id,
+        ),
+    )
+
+
+
 def _status_to_code(status_code: int) -> str:
     codes = {
         400: "BAD_REQUEST",

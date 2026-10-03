@@ -28,8 +28,15 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = "CHANGE_ME"
+    jwt_secret: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480
+    jwt_expire_minutes: int = 30
+    login_rate_limit: str = "5/minute"
+
+    @property
+    def token_secret(self) -> str:
+        return self.jwt_secret if self.jwt_secret else self.secret_key
 
     # CORS — comma-separated list in env, parsed to list
     cors_origins: str = "http://localhost:8501,http://127.0.0.1:8501"

@@ -18,7 +18,6 @@ import importlib
 import platform
 import subprocess
 import sys
-from typing import Callable
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -153,7 +152,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print(f"\nSmart Attendance & Security System — Environment Check")
+    print("\nSmart Attendance & Security System — Environment Check")
     print(f"Python: {sys.version}")
     print(f"Platform: {platform.platform()}")
     print("-" * 60)

@@ -14,11 +14,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.api.v1.router import api_v1_router
 from backend.app.core.config import Settings, get_settings
+from slowapi.errors import RateLimitExceeded
+from backend.app.core.rate_limit import limiter
 from backend.app.core.errors import (
     http_exception_handler,
+    rate_limit_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
+
 from backend.app.core.logging import configure_logging
 
 
@@ -71,12 +75,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
 
+    # Attach slowapi rate limiter
+    app.state.limiter = limiter
+
     # -------------------------------------------------------------------------
     # Exception Handlers
     # -------------------------------------------------------------------------
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+
 
     # -------------------------------------------------------------------------
     # Routers
