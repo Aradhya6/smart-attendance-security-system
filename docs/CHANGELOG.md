@@ -31,13 +31,23 @@
 - Initial Alembic migration `0001_initial.py` with HNSW vector index and partial unique index.
 - Comprehensive database schema test suite `backend/tests/db/test_schema.py` (7 tests).
 
-## [Phase 5] - 2026-10-03
+## [Phase 6] - 2026-10-03
 ### Added
-- FastAPI application factory `create_app()` in `backend/app/main.py`.
-- Application configuration via `pydantic-settings` in `backend/app/core/config.py`.
-- Structured JSON logging with sensitive field redaction in `backend/app/core/logging.py`.
-- Uniform error handling and exception handlers without traceback leakage in `backend/app/core/errors.py`.
-- Security headers middleware, Request ID middleware, and CORS configuration.
-- Health check endpoints (`/api/v1/health` and `/api/v1/health/db`).
-- API foundation test suite `backend/tests/api/` (10 tests).
+- Argon2id password hashing and constant-time dummy verification for non-existent users in `backend/app/core/security.py`.
+- JWT creation and validation with unique `jti`, expiration, algorithm pinning, and denylist checking.
+- Rate limiting via slowapi (`5/minute` on `/auth/login`).
+- Audit logging for login attempts (success and failure) via `backend/app/services/audit_service.py`.
+- Auth endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, and `GET /api/v1/auth/me`.
+- RBAC dependencies with `require_role("ADMIN", "OPERATOR")`.
+- Automated test suites: `backend/tests/api/test_auth.py` and `backend/tests/api/test_rbac.py`.
+
+## [Phase 7] - 2026-10-03
+### Added
+- Student Pydantic schemas (`StudentCreate`, `StudentUpdate`, `StudentResponse`, `StudentListResponse`) in `backend/app/schemas/student.py`.
+- Student repository `StudentRepository` in `backend/app/db/repositories/student_repo.py`.
+- Student business service `StudentService` with audit logging in `backend/app/services/student_service.py`.
+- Student REST API endpoints (`POST/GET /api/v1/students`, `GET/PATCH/DELETE /api/v1/students/{id}`) with RBAC enforcement in `backend/app/api/v1/students.py`.
+- Streamlit unified dashboard shell (`frontend/app.py`), login gate component (`frontend/components/auth.py`), and API client (`frontend/api_client.py`).
+- Frontend login gate test in `frontend/tests/test_login_gate.py`.
+- Student management API test suite `backend/tests/api/test_students.py` (7 tests).
 
