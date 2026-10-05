@@ -82,11 +82,25 @@ async def capture_frame(
     if not cam.is_open():
         cam.open()
 
+    from backend.app.vision.preprocess import validate_image_quality
+
     success, frame = cam.read_frame()
     if not success or frame is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to capture frame from camera",
+        )
+
+    # Validate image quality (resolution, brightness, blur)
+    val_res = validate_image_quality(frame)
+    if not val_res.ok:
+        return FaceCaptureResponse(
+            accepted=False,
+            current_samples=len(session.frames),
+            target_samples=session.target_samples,
+            reason=val_res.reason,
+            quality_score=val_res.metrics.blur_score if val_res.metrics else None,
+            pose_prompt=session.current_prompt(),
         )
 
     # Add frame in memory
@@ -97,6 +111,7 @@ async def capture_frame(
         accepted=True,
         current_samples=count,
         target_samples=session.target_samples,
+        quality_score=val_res.metrics.blur_score if val_res.metrics else None,
         pose_prompt=next_prompt,
     )
 
