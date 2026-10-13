@@ -44,12 +44,49 @@ class Settings(BaseSettings):
     # AI / device
     device: str = "cpu"
     onnx_provider: str = "CPUExecutionProvider"
+    insightface_model_name: str = "buffalo_s"
+
+    # Phase 10: Detection thresholds
+    det_size: int = 640
+    det_threshold: float = 0.5
+    min_face_pixels: int = 80
+
+    # Phase 11: Embedding / recognition
     face_match_threshold: float = 0.50
     face_detection_confidence: float = 0.60
-    deduplication_cooldown_seconds: int = 1800
-    insightface_model_name: str = "buffalo_s"
+
+    # Phase 13: Recognition
+    recognition_threshold: float = 0.50   # cosine similarity to accept identity
+    recognition_margin: float = 0.05      # min gap between top-2 identities
+    top_k: int = 5                         # pgvector nearest-neighbour count
+
+    # Phase 14: Camera worker
+    process_every_n_frames: int = 3
+    confirm_frames: int = 3
+    stream_jpeg_quality: int = 70
+    stream_max_fps: int = 15
+    webcam_index: int = 0
     frame_sample_interval: int = 5
     default_camera_source: str = "0"
+
+    # Phase 15: Attendance
+    attendance_cooldown_seconds: int = 300
+    attendance_session_label: str = "DEFAULT"
+    attendance_late_after: str = ""
+    deduplication_cooldown_seconds: int = 1800
+
+    # Phase 17: Detection events
+    unknown_event_cooldown_seconds: int = 30
+    recognized_event_cooldown_seconds: int = 30
+    unknown_snapshot_enabled: bool = False
+    retain_raw_images: bool = False
+
+    # Registration
+    face_samples_required: int = 30
+    face_min_samples: int = 5
+    session_ttl_seconds: int = 600
+
+    # Timezone
     app_timezone: str = "Asia/Kolkata"
 
     @property
@@ -59,7 +96,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """Fail fast if secret_key is still CHANGE_ME in non-development environments."""
-        if self.app_env != "development" and self.secret_key in ("CHANGE_ME", "change_this_to_a_secure_random_string_in_production"):
+        if self.app_env != "development" and self.secret_key in (
+            "CHANGE_ME",
+            "change_this_to_a_secure_random_string_in_production",
+        ):
             raise ValueError(
                 "SECRET_KEY must be changed from the default value before running in "
                 f"'{self.app_env}' environment. Generate one with: "
