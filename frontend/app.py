@@ -231,15 +231,28 @@ if selected_page == "👥 Students":
                                         cap_res = api.capture_face_sample(target_stu_id, active_sess["session_id"])
                                         active_sess["current_samples"] = cap_res["current_samples"]
                                         active_sess["prompt"] = cap_res["pose_prompt"]
-                                        if active_sess["current_samples"] >= active_sess["target_samples"]:
-                                            st.balloons()
-                                            st.success("🎉 Target face samples reached! (Proceed to commit in Phase 11-12)")
                                         st.rerun()
                                     except Exception as ex:
                                         st.error(f"Capture failed: {ex}")
 
+                                if active_sess["current_samples"] >= active_sess["target_samples"]:
+                                    st.success("🎉 Target samples reached! Click below to save embeddings.")
+                                    if st.button("💾 Commit & Save Face Embeddings", use_container_width=True, type="primary"):
+                                        try:
+                                            commit_res = api.commit_face_registration(target_stu_id, active_sess["session_id"])
+                                            stored = commit_res.get("stored_count", 0)
+                                            rejected = commit_res.get("rejected_count", 0)
+                                            st.success(f"✅ Face registered! {stored} embeddings stored, {rejected} rejected by consistency check.")
+                                            del st.session_state["face_session"]
+                                            st.rerun()
+                                        except Exception as ex:
+                                            st.error(f"Commit failed: {ex}")
+
                                 if st.button("❌ Cancel & Release Camera", use_container_width=True):
-                                    api.cancel_face_session(target_stu_id, active_sess["session_id"])
+                                    try:
+                                        api.cancel_face_session(target_stu_id, active_sess["session_id"])
+                                    except Exception:
+                                        pass
                                     del st.session_state["face_session"]
                                     st.rerun()
                 except Exception as e:
@@ -247,43 +260,204 @@ if selected_page == "👥 Students":
 
 elif selected_page == "📊 Dashboard":
     st.header("📊 System Overview")
-    st.info("System Dashboard KPIs and recent activity (Coming in Phase 16 & 26)")
+    try:
+        summary = api.get("/dashboard/summary")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("👥 Total Students", summary.get("total_students", 0))
+        col2.metric("✅ Present Today", summary.get("present_today", 0))
+        col3.metric(
+            "📊 Attendance %",
+            f"{summary.get('attendance_percent', 0):.1f}%",
+        )
+        col4.metric("❓ Unknown Today", summary.get("unknown_today", 0))
+
+        col5, col6, col7 = st.columns(3)
+        col5.metric("📷 Active Cameras", summary.get("active_cameras", 0))
+        col6.metric("⚠️ Open Alerts", summary.get("active_alerts", 0))
+        col7.metric("🚫 Blacklisted Today", summary.get("blacklisted_today", 0))
+
+        st.caption(f"Data for: {summary.get('date', 'today')} | Students with faces: {summary.get('students_with_faces', 0)}")
+        st.divider()
+
+        st.subheader("Recent Attendance")
+        try:
+            recent = api.get("/attendance/recent", params={"limit": 15})
+            if recent:
+                import pandas as pd
+                df = pd.DataFrame([{
+                    "Student ID": r["student_id"],
+                    "Name": r["full_name"],
+                    "Date": r["attendance_date"],
+                    "Time": r["marked_at"],
+                    "Status": r["status"],
+                    "Score": f"{r['similarity']:.2f}",
+                    "Method": r["method"],
+                } for r in recent])
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No attendance records yet today.")
+        except Exception as e:
+            st.warning(f"Could not load recent attendance: {e}")
+    except Exception as e:
+        st.error(f"Dashboard unavailable: {e}")
 
 elif selected_page == "📹 Live Attendance":
     st.header("📹 Live Attendance Recognition")
-    st.info("Live webcam face recognition & attendance marking (Coming in Phase 14-15)")
+    if role not in ("ADMIN",):
+        st.warning("ADMIN access required to start/stop camera workers.")
+    else:
+        # Fetch cameras
+        try:
+            workers = api.get("/recognition/workers")
+        except Exception:
+            workers = []
+
+        # Get seeded camera
+        try:
+            cams_resp = api.get("/students", params={"size": 1})  # just to test auth
+            # Fetch the seeded camera id from DB
+            import requests, os
+            r = requests.get(
+                f"{api.base_url}/health",
+                headers=api._get_headers(),
+            )
+            # Use known camera id from seed
+            camera_id_str = st.text_input(
+                "Camera UUID (from `python scripts/seed_camera.py`)",
+                key="live_cam_id",
+            )
+        except Exception:
+            camera_id_str = ""
+
+        running_ids = {w["camera_id"] for w in workers if w["status"] == "RUNNING"}
+        col_start, col_stop, col_status = st.columns(3)
+        with col_start:
+            if st.button("▶️ Start Camera Worker", disabled=not camera_id_str):
+                try:
+                    res = api.post(f"/recognition/workers/{camera_id_str}/start")
+                    st.success(f"Worker started: {res.get('status')}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not start: {e}")
+        with col_stop:
+            if st.button("⏹️ Stop Camera Worker", disabled=not camera_id_str):
+                try:
+                    res = api.post(f"/recognition/workers/{camera_id_str}/stop")
+                    st.success(f"Worker stopped: {res.get('status')}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not stop: {e}")
+        with col_status:
+            st.write("**Active Workers:**", len(running_ids))
+
+        if workers:
+            for w in workers:
+                st.info(f"Camera {w['camera_id'][:8]}… | Status: {w['status']} | FPS: {w.get('fps', 0):.1f}")
+
+        if camera_id_str and camera_id_str in running_ids:
+            try:
+                ticket = api.get_stream_ticket(camera_id_str)
+                stream_url = f"{api.base_url}/stream/{camera_id_str}?ticket={ticket}"
+                st.markdown(
+                    f'<img src="{stream_url}" width="100%" style="border-radius:8px; border:2px solid #2196F3;" />',
+                    unsafe_allow_html=True,
+                )
+            except Exception as e:
+                st.warning(f"Stream unavailable: {e}")
 
 elif selected_page == "📋 Attendance Records":
     st.header("📋 Attendance Records")
-    st.info("Historical attendance records and filters (Coming in Phase 15)")
+    from datetime import date, timedelta
+    import pandas as pd
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        from_dt = st.date_input("From Date", value=date.today() - timedelta(days=7))
+    with col2:
+        to_dt = st.date_input("To Date", value=date.today())
+    with col3:
+        sid_filter = st.text_input("Student ID (optional)")
+
+    try:
+        params = {"from_date": str(from_dt), "to_date": str(to_dt), "size": 200}
+        if sid_filter:
+            params["student_id"] = sid_filter
+        records = api.get("/attendance", params=params)
+        if records:
+            df = pd.DataFrame([{
+                "Student ID": r["student_id"],
+                "Name": r["full_name"],
+                "Date": r["attendance_date"],
+                "Time": str(r["marked_at"])[:19],
+                "Status": r["status"],
+                "Score": f"{r['similarity']:.3f}",
+                "Method": r["method"],
+            } for r in records])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.caption(f"{len(records)} record(s) shown")
+
+            if role == "ADMIN":
+                st.subheader("Manual Attendance Mark")
+                with st.form("manual_att"):
+                    m_sid = st.text_input("Student ID")
+                    m_reason = st.text_input("Reason")
+                    m_date = st.date_input("Date", value=date.today())
+                    if st.form_submit_button("Mark Present"):
+                        try:
+                            res = api.post("/attendance/manual", json={
+                                "student_id": m_sid,
+                                "reason": m_reason,
+                                "attendance_date": str(m_date),
+                            })
+                            if res.get("marked"):
+                                st.success(f"Marked present for {m_sid} on {m_date}")
+                            else:
+                                st.warning(f"{m_sid} already marked for {m_date}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+        else:
+            st.info("No records for this date range.")
+    except Exception as e:
+        st.error(f"Failed to load records: {e}")
 
 elif selected_page == "📈 Reports":
     st.header("📈 Reports & Exports")
-    st.info("Attendance reporting & CSV exports (Coming in Phase 30)")
+    st.info("Attendance reporting & CSV exports (Phase 30 scope).")
+    st.markdown("Use **Attendance Records** tab to view and filter records.")
 
 elif selected_page == "🛡️ Live Monitoring":
     st.header("🛡️ Campus Security Monitoring")
-    st.info("Multi-camera live surveillance (Security Module - Friend's scope)")
+    st.info("Multi-camera live surveillance (Security Module — separate scope)")
 
 elif selected_page == "⚠️ Alerts":
     st.header("⚠️ Security Alerts")
-    st.info("Real-time intrusion & blacklist alerts (Security Module - Friend's scope)")
+    st.info("Real-time intrusion & blacklist alerts (Security Module)")
 
 elif selected_page == "🚫 Blacklist":
     st.header("🚫 Blacklist Management")
-    st.info("Campus blacklist registry (Security Module - Friend's scope)")
+    st.info("Campus blacklist registry (Security Module)")
 
 elif selected_page == "🔍 Detection Events":
     st.header("🔍 Detection Events")
-    st.info("All raw detection sightings (Security Module - Friend's scope)")
+    st.info("All raw detection sightings (Security Module)")
 
 elif selected_page == "📍 Movement Tracking":
     st.header("📍 Movement Tracking")
-    st.info("Sightings timeline (Security Module - Friend's scope)")
+    st.info("Sightings timeline (Security Module)")
 
 elif selected_page == "📷 Cameras":
     st.header("📷 Camera Management")
-    st.info("Camera registry & status (Coming in Phase 22)")
+    try:
+        workers = api.get("/recognition/workers")
+        if workers:
+            for w in workers:
+                st.metric(f"Camera {w['camera_id'][:8]}…", w["status"], f"FPS: {w.get('fps', 0):.1f}")
+        else:
+            st.info("No camera workers currently running.")
+        st.caption("To start a camera: go to 📹 Live Attendance and use the camera controls.")
+    except Exception as e:
+        st.warning(f"Could not fetch worker status: {e}")
 
 elif selected_page == "👤 Users":
     st.header("👤 User Management")
@@ -292,3 +466,4 @@ elif selected_page == "👤 Users":
 elif selected_page == "⚙️ Settings":
     st.header("⚙️ System Settings")
     st.info("Recognition thresholds and system parameters")
+

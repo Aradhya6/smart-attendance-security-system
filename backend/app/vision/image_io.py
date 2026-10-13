@@ -3,7 +3,8 @@ Safe image decode and verification utilities.
 Enforces magic-byte detection, size bounds (<=5MB), dimension limits (<=4096px),
 and decompression-bomb protections. Never trusts user-supplied file extensions.
 """
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple
 import cv2
 import numpy as np
 
@@ -23,7 +24,7 @@ def detect_image_format(data: bytes) -> str:
     return "unknown"
 
 
-def safe_decode_image(data: bytes) -> Tuple[bool, str, np.ndarray | None]:
+def safe_decode_image(data: bytes) -> Tuple[bool, str, Optional[np.ndarray]]:
     """
     Safely decode raw image bytes into a BGR numpy array.
     Returns: (success, reason_or_format, ndarray_or_none)
@@ -38,7 +39,6 @@ def safe_decode_image(data: bytes) -> Tuple[bool, str, np.ndarray | None]:
     if fmt == "unknown":
         return False, "INVALID_IMAGE", None
 
-    # Decode bytes into numpy array without writing to disk
     nparr = np.frombuffer(data, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -50,3 +50,16 @@ def safe_decode_image(data: bytes) -> Tuple[bool, str, np.ndarray | None]:
         return False, "IMAGE_DIMENSIONS_TOO_LARGE", None
 
     return True, fmt, image
+
+
+@dataclass
+class DecodeResult:
+    ok: bool
+    reason: str
+    image: Optional[np.ndarray]
+
+
+def safe_decode_upload(data: bytes) -> DecodeResult:
+    """Decode uploaded image bytes, return a DecodeResult."""
+    ok, reason, image = safe_decode_image(data)
+    return DecodeResult(ok=ok, reason=reason, image=image)

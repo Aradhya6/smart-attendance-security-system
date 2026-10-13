@@ -3,6 +3,7 @@ Face registration and capture session endpoints.
 """
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.api.v1.stream import get_preview_webcam
@@ -182,3 +183,55 @@ async def delete_face_biometrics(
         details={"reason": "Biometric withdrawal"},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class CommitSessionRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/commit", status_code=status.HTTP_200_OK)
+async def commit_face_registration(
+    student_id: uuid.UUID,
+    payload: CommitSessionRequest,
+    request: Request,
+    current_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Commit a completed registration session: detect → embed → consistency → store.
+    Returns stored_count and rejected_count.
+    Embeddings are never returned.
+    """
+    from backend.app.services.face_service import commit_face_registration as do_commit
+
+    student = db.get(Student, student_id)
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    try:
+        stored, rejected = do_commit(
+            db=db,
+            student_uuid=student.id,
+            session_id=payload.session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    client_ip = request.client.host if request.client else "unknown"
+    create_audit_log(
+        db=db,
+        action="FACE_REGISTER",
+        entity_type="STUDENT",
+        actor_user_id=current_user.id,
+        entity_id=student.student_id,
+        ip=client_ip,
+        details={"stored": stored, "rejected": rejected},
+    )
+    return {
+        "stored_count": stored,
+        "rejected_count": rejected,
+        "student_id": str(student.id),
+    }
+

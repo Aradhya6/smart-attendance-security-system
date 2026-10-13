@@ -150,3 +150,21 @@ class APIClient:
         url = f"{self.base_url}/students/{student_uuid}/face/session/{session_id}"
         res = requests.delete(url, headers=self._get_headers())
         self._handle_response(res)
+
+    def commit_face_registration(self, student_uuid: str, session_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/students/{student_uuid}/face/commit"
+        res = requests.post(url, json={"session_id": session_id}, headers=self._get_headers())
+        return self._handle_response(res)
+
+    def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """Generic GET request to the backend API."""
+        url = f"{self.base_url}{path}"
+        res = requests.get(url, params=params, headers=self._get_headers())
+        return self._handle_response(res)
+
+    def post(self, path: str, json: Optional[Dict[str, Any]] = None,
+             params: Optional[Dict[str, Any]] = None) -> Any:
+        """Generic POST request to the backend API."""
+        url = f"{self.base_url}{path}"
+        res = requests.post(url, json=json, params=params, headers=self._get_headers())
+        return self._handle_response(res)

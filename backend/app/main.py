@@ -4,6 +4,7 @@ Application factory with request ID, security headers, CORS,
 uniform error handling, and structured logging.
 """
 import uuid
+from contextlib import asynccontextmanager
 from typing import Callable
 
 from fastapi import FastAPI, Request, Response
@@ -26,6 +27,18 @@ from backend.app.core.errors import (
 from backend.app.core.logging import configure_logging
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle manager."""
+    yield
+    # Graceful shutdown: stop all camera workers
+    try:
+        from backend.app.cameras.manager import camera_manager
+        camera_manager.stop_all()
+    except Exception:
+        pass
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application instance."""
     if settings is None:
@@ -39,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=_lifespan,
     )
 
     # -------------------------------------------------------------------------
