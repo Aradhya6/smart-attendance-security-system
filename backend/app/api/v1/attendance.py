@@ -61,7 +61,7 @@ def list_attendance(
         conditions.append("s.department = :department")
         params["department"] = department
     if year:
-        conditions.append("s.year_of_study = :year")
+        conditions.append("s.year = :year")
         params["year"] = year
     if camera_id:
         conditions.append("ar.camera_id = :camera_id")
@@ -77,7 +77,7 @@ def list_attendance(
     where = " AND ".join(conditions)
     rows = db.execute(
         text(f"""
-            SELECT ar.id, ar.student_id, s.student_id as sid, s.full_name,
+            SELECT ar.id, ar.student_id, s.student_id as sid, s.name as full_name,
                    ar.attendance_date, ar.session_label, ar.marked_at,
                    ar.status, ar.similarity, ar.method, ar.camera_id
             FROM attendance_records ar
@@ -112,11 +112,11 @@ def recent_attendance(
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_role("ADMIN", "OPERATOR")),
     db: Session = Depends(get_db),
-) -> List[AttendanceRecordSchema]:
+):
     """Most recent attendance marks (for live panel)."""
     rows = db.execute(
         text("""
-            SELECT ar.id, ar.student_id, s.student_id as sid, s.full_name,
+            SELECT ar.id, ar.student_id, s.student_id as sid, s.name as full_name,
                    ar.attendance_date, ar.session_label, ar.marked_at,
                    ar.status, ar.similarity, ar.method, ar.camera_id
             FROM attendance_records ar

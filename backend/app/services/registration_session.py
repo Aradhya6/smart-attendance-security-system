@@ -56,6 +56,11 @@ class RegistrationSession:
             idx = len(self.frames) % len(POSE_PROMPTS)
             return POSE_PROMPTS[idx]
 
+    def get_frames(self) -> List[np.ndarray]:
+        """Return a snapshot (copy) of the collected frames."""
+        with self.lock:
+            return list(self.frames)
+
     def clear(self) -> None:
         with self.lock:
             self.frames.clear()

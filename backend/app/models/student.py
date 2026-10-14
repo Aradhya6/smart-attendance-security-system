@@ -49,3 +49,11 @@ class Student(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == "ACTIVE"
+
+    @property
+    def full_name(self) -> str:
+        return self.name

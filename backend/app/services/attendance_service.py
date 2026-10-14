@@ -32,10 +32,10 @@ logger = logging.getLogger(__name__)
 class AttendanceService:
     """Thread-safe attendance handler wired into the camera worker."""
 
-    def __init__(self) -> None:
+    def __init__(self, session_label: Optional[str] = None) -> None:
         settings = get_settings()
         self._cooldown = settings.attendance_cooldown_seconds
-        self._session_label = settings.attendance_session_label
+        self._session_label = session_label or settings.attendance_session_label
         self._late_after = settings.attendance_late_after  # "HH:MM" or ""
         self._tz = pytz.timezone(settings.app_timezone)
 
@@ -87,7 +87,8 @@ class AttendanceService:
         with SessionLocal() as db:
             # Verify student is active
             student = db.get(Student, student_uuid)
-            if student is None or not student.is_active:
+            is_active = getattr(student, "is_active", False)
+            if student is None or not is_active:
                 logger.debug("AttendanceService: student %s inactive or not found", student_uuid)
                 return
 

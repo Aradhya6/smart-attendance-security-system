@@ -71,7 +71,13 @@ selected_page = st.sidebar.radio("Navigation", selectable_options)
 # Router
 if selected_page == "👥 Students":
     st.header("👥 Student Management")
-    tabs = st.tabs(["Search & List", "Register New Student", "Edit / Manage", "📸 Register Face (Webcam)"])
+    tabs = st.tabs([
+        "Search & List",
+        "Register New Student",
+        "Edit / Manage",
+        "📸 Register Face (Webcam)",
+        "🖼️ Register Face (Photo)",
+    ])
 
     with tabs[0]:
         st.subheader("Student Directory")
@@ -258,6 +264,48 @@ if selected_page == "👥 Students":
                 except Exception as e:
                     st.error(f"Error loading student: {e}")
 
+    with tabs[4]:
+        st.subheader("🖼️ Register Face Using Photo")
+        if role != "ADMIN":
+            st.warning("⚠️ Only ADMIN users have permission to register biometrics.")
+        else:
+            photo_stu_id = st.text_input("Enter Student UUID to Enroll Face", key="photo_reg_stu_id")
+            if photo_stu_id:
+                try:
+                    stu = api.get_student(photo_stu_id)
+                    st.write(f"Enrolling: **{stu['name']}** ({stu['student_id']})")
+                    if not stu.get("consent_given_at"):
+                        st.error("❌ Cannot register biometrics: Student has NOT provided biometric consent. Please update student profile with consent first.")
+                    elif stu.get("status") != "ACTIVE":
+                        st.error(f"❌ Cannot register biometrics: Student status is '{stu.get('status')}'. Only ACTIVE students can register.")
+                    else:
+                        st.success("✅ Consent and status verified. Ready for photo upload.")
+                        uploaded_file = st.file_uploader(
+                            "Upload Face Photo (JPG, JPEG, or PNG, max 5 MB)",
+                            type=["jpg", "jpeg", "png"],
+                            key="photo_reg_uploader",
+                        )
+                        if uploaded_file is not None:
+                            st.image(uploaded_file, caption="Photo Preview", width=300)
+                            if st.button("Validate & Register Face", type="primary", use_container_width=True):
+                                with st.spinner("Analyzing image, detecting face, and generating biometric embedding..."):
+                                    try:
+                                        file_bytes = uploaded_file.getvalue()
+                                        res = api.upload_face_photo(
+                                            student_uuid=photo_stu_id,
+                                            file_bytes=file_bytes,
+                                            filename=uploaded_file.name,
+                                            content_type=uploaded_file.type or "image/jpeg",
+                                        )
+                                        stored = res.get("stored_count", 1)
+                                        q_score = res.get("quality_score", 0.0)
+                                        st.success(f"🎉 Face registered successfully! Stored {stored} embedding (quality score: {q_score:.2f}).")
+                                        st.balloons()
+                                    except Exception as ex:
+                                        st.error(f"❌ Registration failed: {ex}")
+                except Exception as e:
+                    st.error(f"Error loading student: {e}")
+
 elif selected_page == "📊 Dashboard":
     st.header("📊 System Overview")
     try:
@@ -306,64 +354,172 @@ elif selected_page == "📹 Live Attendance":
     if role not in ("ADMIN",):
         st.warning("ADMIN access required to start/stop camera workers.")
     else:
-        # Fetch cameras
+        # Fetch registered cameras and running workers from backend
         try:
-            workers = api.get("/recognition/workers")
+            cameras = api.list_cameras()
+        except Exception as e:
+            st.error(f"Failed to fetch registered cameras: {e}")
+            cameras = []
+
+        try:
+            workers = api.list_camera_workers()
         except Exception:
             workers = []
 
-        # Get seeded camera
-        try:
-            cams_resp = api.get("/students", params={"size": 1})  # just to test auth
-            # Fetch the seeded camera id from DB
-            import requests, os
-            r = requests.get(
-                f"{api.base_url}/health",
-                headers=api._get_headers(),
-            )
-            # Use known camera id from seed
-            camera_id_str = st.text_input(
-                "Camera UUID (from `python scripts/seed_camera.py`)",
-                key="live_cam_id",
-            )
-        except Exception:
-            camera_id_str = ""
+        if not cameras:
+            st.warning("No registered cameras found in database.")
+        else:
+            # Find default camera (Laptop Webcam)
+            default_idx = 0
+            for idx, c in enumerate(cameras):
+                if "laptop" in c["name"].lower() or "webcam" in c["name"].lower():
+                    default_idx = idx
+                    break
 
-        running_ids = {w["camera_id"] for w in workers if w["status"] == "RUNNING"}
-        col_start, col_stop, col_status = st.columns(3)
-        with col_start:
-            if st.button("▶️ Start Camera Worker", disabled=not camera_id_str):
-                try:
-                    res = api.post(f"/recognition/workers/{camera_id_str}/start")
-                    st.success(f"Worker started: {res.get('status')}")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not start: {e}")
-        with col_stop:
-            if st.button("⏹️ Stop Camera Worker", disabled=not camera_id_str):
-                try:
-                    res = api.post(f"/recognition/workers/{camera_id_str}/stop")
-                    st.success(f"Worker stopped: {res.get('status')}")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not stop: {e}")
-        with col_status:
-            st.write("**Active Workers:**", len(running_ids))
-
-        if workers:
-            for w in workers:
-                st.info(f"Camera {w['camera_id'][:8]}… | Status: {w['status']} | FPS: {w.get('fps', 0):.1f}")
-
-        if camera_id_str and camera_id_str in running_ids:
-            try:
-                ticket = api.get_stream_ticket(camera_id_str)
-                stream_url = f"{api.base_url}/stream/{camera_id_str}?ticket={ticket}"
-                st.markdown(
-                    f'<img src="{stream_url}" width="100%" style="border-radius:8px; border:2px solid #2196F3;" />',
-                    unsafe_allow_html=True,
+            cam_options = [f"{c['name']} ({c['location']} — {c['source_type']})" for c in cameras]
+            col_cam, col_sess = st.columns([3, 2])
+            with col_cam:
+                selected_cam_idx = st.selectbox(
+                    "Select Camera Device",
+                    range(len(cam_options)),
+                    format_func=lambda i: cam_options[i],
+                    index=default_idx,
+                    key="live_cam_select",
                 )
-            except Exception as e:
-                st.warning(f"Stream unavailable: {e}")
+                selected_camera = cameras[selected_cam_idx]
+                camera_id_str = selected_camera["id"]
+            with col_sess:
+                session_label = st.text_input(
+                    "Active Attendance Session Label",
+                    value=st.session_state.get("active_session_label", "DEFAULT"),
+                    key="live_session_label",
+                )
+                st.session_state["active_session_label"] = session_label
+
+            # Check if this camera is currently running
+            matching_worker = next((w for w in workers if w["camera_id"] == camera_id_str), None)
+            is_running = matching_worker is not None and matching_worker.get("status") == "RUNNING"
+            worker_status = matching_worker.get("status") if matching_worker else "STOPPED"
+            worker_fps = matching_worker.get("fps", 0.0) if matching_worker else 0.0
+
+            # Action bar: Start / Stop / Connection status
+            col_start, col_stop, col_stat = st.columns([2, 2, 3])
+            with col_start:
+                if st.button("▶️ Start Live Attendance", type="primary" if not is_running else "secondary", disabled=is_running, use_container_width=True):
+                    try:
+                        res = api.start_camera_worker(camera_id_str, session_label=session_label)
+                        st.success(f"Camera worker started: {res.get('status')}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not start: {e}")
+
+            with col_stop:
+                if st.button("⏹️ Stop Attendance", type="secondary" if not is_running else "primary", disabled=not is_running, use_container_width=True):
+                    try:
+                        res = api.stop_camera_worker(camera_id_str)
+                        st.success(f"Camera worker stopped: {res.get('status')}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not stop: {e}")
+
+            with col_stat:
+                if is_running:
+                    st.success(f"🟢 **Status: RUNNING** | {worker_fps:.1f} FPS | Camera: {selected_camera['name']}")
+                else:
+                    st.info(f"⚪ **Status: {worker_status}** | Camera: {selected_camera['name']} (Device {selected_camera.get('source_url', '0')})")
+
+            # Live View & Real-Time Attendance Stream
+            from datetime import date
+            today_str = str(date.today())
+
+            if is_running:
+                col_stream, col_panel = st.columns([3, 2])
+                with col_stream:
+                    st.subheader("Live Recognition Stream")
+                    try:
+                        ticket = api.get_stream_ticket(camera_id_str)
+                        stream_url = f"{api.base_url}/stream/{camera_id_str}?ticket={ticket}"
+                        st.markdown(
+                            f'<img src="{stream_url}" width="100%" style="border-radius:8px; border:2px solid #4CAF50;" />',
+                            unsafe_allow_html=True,
+                        )
+                        st.caption("🟢 Green: Confirmed Student | 🔴 Red: Unknown / Unconfirmed")
+                    except Exception as e:
+                        st.warning(f"Stream preview unavailable: {e}")
+
+                with col_panel:
+                    st.subheader("📋 Session Attendance")
+                    try:
+                        live_records = api.get("/attendance", params={
+                            "session_label": session_label,
+                            "from_date": today_str,
+                            "to_date": today_str,
+                            "size": 50,
+                        })
+                        if live_records:
+                            st.write(f"**Marked Present:** {len(live_records)} student(s)")
+                            df_live = [
+                                {
+                                    "ID": r["student_id"],
+                                    "Name": r["full_name"],
+                                    "Time": str(r["marked_at"])[11:19] if r.get("marked_at") else "",
+                                    "Score": f"{r['similarity']:.2f}",
+                                    "Status": r["status"],
+                                }
+                                for r in live_records
+                            ]
+                            st.dataframe(df_live, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No students recognized in this session yet. Look at the camera to be marked.")
+                    except Exception as e:
+                        st.error(f"Could not load live attendance records: {e}")
+
+                    if st.button("🔄 Refresh Live Attendance", use_container_width=True):
+                        st.rerun()
+
+            else:
+                # When stopped: show session summary & finalize view
+                st.divider()
+                st.subheader(f"📊 Attendance Summary for Session: '{session_label}'")
+                col_m1, col_m2 = st.columns(2)
+                try:
+                    records_today = api.get("/attendance", params={
+                        "session_label": session_label,
+                        "from_date": today_str,
+                        "to_date": today_str,
+                        "size": 200,
+                    })
+                    all_students_res = api.list_students(status="ACTIVE", size=200)
+                    active_students = all_students_res.get("items", [])
+                    present_ids = {r["student_id"] for r in records_today}
+
+                    col_m1.metric("Present / Late", len(records_today))
+                    col_m2.metric("Total Active Students", len(active_students))
+
+                    if records_today:
+                        st.write("#### Students Present in Session")
+                        df_summary = [
+                            {
+                                "Student ID": r["student_id"],
+                                "Name": r["full_name"],
+                                "Time": str(r["marked_at"])[11:19] if r.get("marked_at") else "",
+                                "Status": r["status"],
+                                "Similarity": f"{r['similarity']:.3f}",
+                            }
+                            for r in records_today
+                        ]
+                        st.dataframe(df_summary, use_container_width=True, hide_index=True)
+
+                    unmarked = [s for s in active_students if s["student_id"] not in present_ids]
+                    if unmarked:
+                        with st.expander(f"Unmarked Students ({len(unmarked)} students not present)"):
+                            df_absent = [
+                                {"Student ID": s["student_id"], "Name": s["name"], "Department": s["department"], "Year": s["year"]}
+                                for s in unmarked
+                            ]
+                            st.dataframe(df_absent, use_container_width=True, hide_index=True)
+                except Exception as ex:
+                    st.caption(f"Summary info: {ex}")
 
 elif selected_page == "📋 Attendance Records":
     st.header("📋 Attendance Records")

@@ -19,7 +19,7 @@ class CameraManager:
     def __init__(self) -> None:
         self._workers: Dict[uuid.UUID, object] = {}  # camera_id → CameraWorker
 
-    def start_worker(self, camera_id: uuid.UUID, db: Session) -> str:
+    def start_worker(self, camera_id: uuid.UUID, db: Session, session_label: Optional[str] = None) -> str:
         """Start a worker for the given camera. Raises ValueError if already running."""
         from backend.app.cameras.webcam import WebcamSource
         from backend.app.cameras.worker import CameraWorker, RUNNING
@@ -29,6 +29,7 @@ class CameraManager:
         from backend.app.vision.model_registry import ModelRegistry
         from backend.app.vision.pipeline import VisionPipeline
         from backend.app.db.repositories.face_repo import count_active_for_student
+        from backend.app.api.v1.stream import get_preview_webcam
 
         if camera_id in self._workers:
             w = self._workers[camera_id]
@@ -42,9 +43,9 @@ class CameraManager:
         if camera is None:
             raise ValueError(f"Camera {camera_id} not found")
 
-        # Build student label cache
-        students = db.query(Student).filter(Student.is_active.is_(True)).all()
-        student_cache = {s.id: (s.student_id, s.full_name) for s in students}
+        # Build student label cache using actual Student model attributes (status, name)
+        students = db.query(Student).filter(Student.status == "ACTIVE").all()
+        student_cache = {s.id: (s.student_id, s.name) for s in students}
 
         # Build pipeline
         registry = ModelRegistry.instance()
@@ -64,6 +65,14 @@ class CameraManager:
         except (ValueError, TypeError):
             cam_index = int(settings.webcam_index)
 
+        # Release any preview camera if holding index 0 (Windows camera exclusivity)
+        try:
+            preview_cam = get_preview_webcam(cam_index)
+            if preview_cam.is_open():
+                preview_cam.release()
+        except Exception as exc:
+            logger.debug("Error releasing preview camera: %s", exc)
+
         source = WebcamSource(camera_index=cam_index)
 
         worker = CameraWorker(
@@ -72,9 +81,9 @@ class CameraManager:
             pipeline=pipeline,
         )
 
-        # Wire attendance handler
+        # Wire attendance handler with session_label
         from backend.app.services.attendance_service import AttendanceService
-        att_service = AttendanceService()
+        att_service = AttendanceService(session_label=session_label)
         worker.add_observer(att_service.handle_confirmed)
 
         # Wire detection event handler (Phase 17)
@@ -84,7 +93,7 @@ class CameraManager:
 
         worker.start()
         self._workers[camera_id] = worker
-        logger.info("CameraManager: started worker for camera %s", camera_id)
+        logger.info("CameraManager: started worker for camera %s (session=%s)", camera_id, session_label or "DEFAULT")
         return worker.status
 
     def stop_worker(self, camera_id: uuid.UUID) -> str:

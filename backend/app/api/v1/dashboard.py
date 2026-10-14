@@ -35,11 +35,11 @@ def dashboard_summary(
     row = db.execute(
         text("""
             SELECT
-                (SELECT COUNT(*) FROM students WHERE is_active = true) AS total_students,
+                (SELECT COUNT(*) FROM students WHERE status = 'ACTIVE') AS total_students,
                 (SELECT COUNT(DISTINCT student_id) FROM attendance_records
                  WHERE attendance_date = :today) AS present_today,
                 (SELECT COUNT(*) FROM students s
-                 WHERE s.is_active = true
+                 WHERE s.status = 'ACTIVE'
                    AND EXISTS (SELECT 1 FROM face_embeddings fe
                                WHERE fe.student_id = s.id AND fe.is_active = true)
                 ) AS students_with_faces,

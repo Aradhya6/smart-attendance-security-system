@@ -3,7 +3,7 @@ Frontend API Client for communicating with the FastAPI backend.
 Handles JWT authentication, headers, error wrapping, and auto-logout on 401.
 """
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import requests
 import streamlit as st
 
@@ -155,6 +155,39 @@ class APIClient:
         url = f"{self.base_url}/students/{student_uuid}/face/commit"
         res = requests.post(url, json={"session_id": session_id}, headers=self._get_headers())
         return self._handle_response(res)
+
+    def upload_face_photo(
+        self,
+        student_uuid: str,
+        file_bytes: bytes,
+        filename: str = "photo.jpg",
+        content_type: str = "image/jpeg",
+    ) -> Dict[str, Any]:
+        url = f"{self.base_url}/students/{student_uuid}/face/upload"
+        headers = {}
+        token = st.session_state.get("token")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        files = {"photo": (filename, file_bytes, content_type)}
+        res = requests.post(url, files=files, headers=headers)
+        return self._handle_response(res)
+
+    def list_cameras(self) -> List[Dict[str, Any]]:
+        """Fetch list of registered cameras from the backend."""
+        return self.get("/cameras")
+
+    def start_camera_worker(self, camera_id: str, session_label: Optional[str] = None) -> Dict[str, Any]:
+        """Start the live recognition camera worker for the given camera UUID."""
+        params = {"session_label": session_label} if session_label else None
+        return self.post(f"/recognition/workers/{camera_id}/start", params=params)
+
+    def stop_camera_worker(self, camera_id: str) -> Dict[str, Any]:
+        """Stop the recognition camera worker."""
+        return self.post(f"/recognition/workers/{camera_id}/stop")
+
+    def list_camera_workers(self) -> List[Dict[str, Any]]:
+        """List states of all camera workers."""
+        return self.get("/recognition/workers")
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """Generic GET request to the backend API."""

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from backend.app.api.v1.auth import router as auth_router
 from backend.app.api.v1.attendance import router as attendance_router
+from backend.app.api.v1.cameras import router as cameras_router
 from backend.app.api.v1.dashboard import router as dashboard_router
 from backend.app.api.v1.face import router as face_router
 from backend.app.api.v1.health import router as health_router
@@ -22,3 +23,4 @@ api_v1_router.include_router(stream_router)
 api_v1_router.include_router(recognition_router)
 api_v1_router.include_router(attendance_router)
 api_v1_router.include_router(dashboard_router)
+api_v1_router.include_router(cameras_router)
